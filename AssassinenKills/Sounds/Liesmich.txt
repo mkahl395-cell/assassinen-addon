@@ -1,0 +1,16 @@
+Eigene Töne für das Assassinen-Addon
+====================================
+
+Lege hier bis zu fünf eigene Tondateien ab:
+
+  eigen1.ogg   (oder eigen1.mp3)
+  eigen2.ogg
+  eigen3.ogg
+  eigen4.ogg
+  eigen5.ogg
+
+Danach das Spiel einmal ganz neu starten (nicht nur /reload), sonst findet
+WoW neue Dateien nicht. Im Spiel mit /assa töne das Ton-Fenster öffnen und
+bei der gewünschten Warnung "Eigene Datei 1" usw. auswählen.
+
+Tipp: kurze Töne (unter 2 Sekunden) funktionieren am besten.

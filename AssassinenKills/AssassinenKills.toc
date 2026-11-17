@@ -1,0 +1,23 @@
+## Interface: 16001, 11507
+## Title: |cffc41e3aAssassinen|r Kill-Tracker
+## Notes: Kills, Screenshots, Späher, Jagdkarte, Hilferuf, Zielansage, Pfeil, Sammelpunkt, Countdown, Wachposten, Kommando-Leiste, Alarme, Rangliste und Kontor für die Gilde Assassinen.
+## Notes-deDE: Kills, Screenshots, Späher, Jagdkarte, Hilferuf, Zielansage, Pfeil, Sammelpunkt, Countdown, Wachposten, Kommando-Leiste, Alarme, Rangliste und Kontor für die Gilde Assassinen.
+## Author: Gilde Assassinen
+## Version: 1.10.5
+## SavedVariables: AssassinenKillsDB
+## IconTexture: Interface\Icons\Ability_Stealth
+
+AssassinenKills.lua
+Spy.lua
+UI.lua
+Toene.lua
+Karte.lua
+Rudel.lua
+Bereit.lua
+Ziele.lua
+Jagd.lua
+Kontor.lua
+Alarm.lua
+Bilanz.lua
+Version.lua
+Leiste.lua
