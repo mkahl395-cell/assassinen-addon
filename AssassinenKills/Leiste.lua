@@ -136,6 +136,10 @@ local DEFS = {
 local function Look(b)
     local st = b.def.state and b.def.state() or nil
     b.st = st or ""
+    if b.isSkinned == true then
+        ns.Design.SetKind(b, (st == "on" or b.def.red) and "red" or "iron", st == "off")
+        return
+    end
     if b.SetBackdropColor then
         if st == "on" then b:SetBackdropColor(.55, .05, .08, .95)
         elseif b.def.red then b:SetBackdropColor(.38, .04, .06, .95)
@@ -155,7 +159,7 @@ end
 local function Build()
     local f = CreateFrame("Frame", "AssassinenLeiste", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
     frame = f
-    UI.Skin(f, .85)
+    UI.Window(f, .85, { border = 12, dark = true })
     local rows = math.ceil(#DEFS / PER_ROW)
     f:SetSize(PER_ROW * (BTN_W + GAP) - GAP + 26, rows * (BTN_H + GAP) - GAP + 8 + 16)
     f:SetFrameStrata("MEDIUM")
@@ -185,6 +189,7 @@ local function Build()
         end)
         b:SetScript("OnEnter", function(self)
             if self.SetBackdropBorderColor then self:SetBackdropBorderColor(.7, .12, .15) end
+            if self.isSkinned == true then ns.Design.Hover(self, true) end
             if self.def.tooltip then pcall(self.def.tooltip, self) return end
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             GameTooltip:AddLine(self.def.tip[1], 1, .25, .25)
@@ -196,6 +201,7 @@ local function Build()
         end)
         b:SetScript("OnLeave", function(self)
             if self.SetBackdropBorderColor then self:SetBackdropBorderColor(.24, .22, .24) end
+            if self.isSkinned == true then ns.Design.Hover(self, false) end
             GameTooltip:Hide()
         end)
         buttons[#buttons + 1] = b

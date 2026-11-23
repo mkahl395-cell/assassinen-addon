@@ -40,6 +40,32 @@ local function Print(text) ns.Print(text) end
 local function Muted() return S.snoozeUntil and time() < S.snoozeUntil end
 Spy.Muted = Muted
 
+-- Neutrale Städte: dort laufen beide Fraktionen herum, Warnungen wären Dauerlärm.
+-- Deutsche und englische Namen; eigene Orte kommen mit /assa neutral hier dazu.
+local NEUTRAL_TOWNS = {}
+for _, n in ipairs({
+    "Beutebucht", "Booty Bay", "Gadgetzan", "Ratschet", "Ratchet", "Ewige Warte", "Everlook",
+    "Kapelle des Hoffnungsvollen Lichts", "Light's Hope Chapel", "Burg Cenarius", "Cenarion Hold",
+    "Thoriumspitze", "Thorium Point", "Dampfdruckpier", "Steamwheedle Port", "Marschalls Zuflucht", "Marshal's Refuge",
+    "Morastwinkel", "Mudsprocket", "Shattrath", "Dalaran",
+}) do NEUTRAL_TOWNS[n:lower()] = true end
+
+function Spy.InNeutralTown()
+    local pvp = GetZonePVPInfo and GetZonePVPInfo()
+    if pvp == "sanctuary" then return true end
+    local own = S and S.neutralOwn or {}
+    for _, z in ipairs({ GetSubZoneText and GetSubZoneText() or "", GetMinimapZoneText and GetMinimapZoneText() or "" }) do
+        local k = z:lower()
+        if k ~= "" and (NEUTRAL_TOWNS[k] or own[k]) then return true, z end
+    end
+    return false
+end
+
+-- Ruhe in neutralen Städten: nur KOS, Aufträge und Fehden melden sich noch
+function Spy.Calm()
+    return S and S.neutralQuiet == true and Spy.InNeutralTown() == true
+end
+
 local function Key(name, realm)
     if not realm or realm == "" then realm = GetRealmName() end
     return name .. "-" .. realm
@@ -49,8 +75,10 @@ local function IsFeud(guild)
     return ns.Rudel and ns.Rudel.IsFeud(guild)
 end
 
-local function Colored(c)
-    return "|c" .. ns.ClassColor(c.class) .. c.name .. "|r"
+-- ink: Name in schwarzer Tinte (für Fenster mit Pergament; helle Klassenfarben wären dort unlesbar)
+local function Colored(c, ink)
+    local hex = (ink and ns.Design and ns.Design.On()) and ns.Design.InkHex() or ns.ClassColor(c.class)
+    return "|c" .. hex .. c.name .. "|r"
 end
 Spy.Colored = Colored
 
@@ -108,6 +136,90 @@ function Spy.ContactFor(name, realm)
     return GetContact(name, realm, true)
 end
 
+-- Eigenes Profil: Person merken, Grund (c.note) und Erlebnisse mit Datum
+function Spy.SetSaved(c, on)
+    if not c then return end
+    c.saved = on and true or nil
+    if ns.UI then ns.UI.Refresh() end
+end
+
+function Spy.AddLog(c, text)
+    if not c or type(text) ~= "string" then return end
+    text = text:gsub("^%s+", ""):gsub("%s+$", "")
+    if text == "" then return end
+    c.log = c.log or {}
+    table.insert(c.log, { t = time(), text = text:sub(1, 200), zone = GetRealZoneText and GetRealZoneText() or nil })
+    while #c.log > 30 do table.remove(c.log, 1) end
+    c.saved = true
+    if ns.UI then ns.UI.Refresh() end
+end
+
+function Spy.DelLog(c, i)
+    if not (c and c.log and c.log[i]) then return end
+    table.remove(c.log, i)
+    if #c.log == 0 then c.log = nil end
+    if ns.UI then ns.UI.Refresh() end
+end
+
+-- Profil teilen: Kopf (Grund, KOS) und die letzten fünf eigenen Erlebnisse.
+-- channel: "GUILD", "PARTY"/"RAID" oder "WHISPER" mit target. Fremde Einträge werden nicht weitergereicht.
+function Spy.ShareProfile(c, channel, target)
+    local R = ns.Rudel
+    if not (c and R and R.Send) then return end
+    if not channel then
+        Print("Teilen geht in der Gilde, in der Gruppe oder per Flüstern an einen Spieler.")
+        return
+    end
+    local opts = target and { target = target } or nil
+    R.Send(channel, opts, "PF", c.name, c.realm or "", c.class or "", c.level or "", c.guild or "", c.kos and "1" or "", c.note or "")
+    local own = {}
+    for _, e in ipairs(c.log or {}) do if not e.by then own[#own + 1] = e end end
+    for i = math.max(1, #own - 4), #own do
+        local e = own[i]
+        R.Send(channel, opts, "PE", c.name, c.realm or "", e.t, e.zone or "", e.text)
+    end
+    local where = channel == "WHISPER" and target or (channel == "GUILD" and "der Gilde") or "der Gruppe"
+    Print(string.format("Profil von %s mit %s geteilt (%d Erlebnis%s).", c.name, where, math.min(#own, 5), math.min(#own, 5) == 1 and "" or "se"))
+end
+
+local sharedNotice = {}
+local function OnSharedProfile(f, sender)
+    local name = f[2]
+    if type(name) ~= "string" or name == "" then return end
+    local c = GetContact(name, f[3] ~= "" and f[3] or nil, true)
+    if f[4] and f[4] ~= "" and not c.class then c.class = f[4] end
+    local lv = tonumber(f[5]); if lv and lv ~= 0 and not c.level then c.level = lv end
+    if f[6] and f[6] ~= "" and not c.guild then c.guild = f[6] end
+    local who = ns.ShortName(sender) or sender
+    c.shared = c.shared or {}
+    c.shared[who] = { reason = (f[8] and f[8] ~= "") and f[8] or nil, kos = f[7] == "1", t = time() }
+    local k = who .. ":" .. name
+    if not sharedNotice[k] or GetTime() - sharedNotice[k] > 60 then
+        sharedNotice[k] = GetTime()
+        Print(string.format("|cffffd100%s teilt sein Profil|r zu %s%s – ansehen: /assa akte %s", who, Colored(c),
+            c.shared[who].reason and (": „" .. c.shared[who].reason .. "“") or "", name))
+    end
+    if ns.UI then ns.UI.Refresh() end
+end
+
+local function OnSharedLog(f, sender)
+    local name, t, text = f[2], tonumber(f[4]), f[6]
+    if type(name) ~= "string" or name == "" or not t or type(text) ~= "string" or text == "" then return end
+    local c = GetContact(name, f[3] ~= "" and f[3] or nil, true)
+    c.log = c.log or {}
+    for _, e in ipairs(c.log) do if e.t == t and e.text == text then return end end
+    table.insert(c.log, { t = t, text = text:sub(1, 200), zone = (f[5] and f[5] ~= "") and f[5] or nil, by = ns.ShortName(sender) or sender })
+    table.sort(c.log, function(a, b) return a.t < b.t end)
+    while #c.log > 30 do table.remove(c.log, 1) end
+    if ns.UI then ns.UI.Refresh() end
+end
+
+function Spy.InitSharing()
+    if not (ns.Rudel and ns.Rudel.On) then return end
+    ns.Rudel.On("PF", OnSharedProfile)
+    ns.Rudel.On("PE", OnSharedLog)
+end
+
 function Spy.Get(key)
     return key and contacts and contacts[key]
 end
@@ -162,6 +274,7 @@ function Spy.List(mode, filter)
         elseif mode == "nemesis" then include = (c.losses or 0) > 0
         elseif mode == "opfer" then include = (c.wins or 0) > 0
         elseif mode == "fehde" then include = IsFeud(c.guild)
+        elseif mode == "gemerkt" then include = c.saved or (c.log and #c.log > 0) or c.shared ~= nil or false
         else include = true end
         if include and filter and not c.name:lower():find(filter, 1, true) and not (c.guild or ""):lower():find(filter, 1, true) then
             include = false
@@ -314,16 +427,17 @@ local function OnNewContact(key, c)
     local feud = IsFeud(c.guild)
     local important = c.kos or (c.contract and not c.contract.done) or score >= 70 or feud
     if ns.UI then ns.UI.OnContact(key, c, score) end
-    if S.guildSync and (important or S.sightShare) then Spy.Report(key, c, important) end
+    if S.guildSync and (important or (S.sightShare and not Spy.Calm())) then Spy.Report(key, c, important) end
     if ns.Jagd then pcall(ns.Jagd.OnSighting, key, c, important) end -- Wachposten meldet sofort
 
     if Muted() then return end
-    CheckMuster(c)
+    local calm = Spy.Calm()
+    if not calm then CheckMuster(c) end
     local now = GetTime()
     if alerted[key] and now - alerted[key] < REALERT_SECONDS then return end
     alerted[key] = now
     local _, instanceType = IsInInstance()
-    if not important and ((S.quietResting and IsResting()) or instanceType == "pvp" or instanceType == "arena") then return end
+    if not important and (calm or (S.quietResting and IsResting()) or instanceType == "pvp" or instanceType == "arena") then return end
 
     if important then
         local why = c.contract and not c.contract.done and "AUFTRAG" or c.kos and "KOS" or feud and "FEHDE" or "Tödlich"
@@ -402,7 +516,7 @@ function Spy.OnCombatLog(sub, srcGUID, srcName, srcFlags, dstGUID, dstName, dstF
         local c, key = SightGUID(srcGUID, srcName)
         if key and dstGUID == me then attacked[key] = GetTime() end
         if c and spellName and stealthSpells[spellName] and (sub == "SPELL_AURA_APPLIED" or sub == "SPELL_CAST_SUCCESS") then
-            if not Muted() then
+            if not Muted() and not Spy.Calm() then
                 if ns.UI then ns.UI.Alert(string.format("%s ist in die Schatten getreten!", Colored(c)), true) end
                 PlayAlert("stealth")
             end
@@ -751,6 +865,21 @@ function Spy.Slash(cmd, raw, arg)
         if not name then Print("Benutzung: /assa kos <Name> [Grund]") return true end
         local c = Spy.Find(name) or GetContact(name, nil, true)
         Spy.SetKos(c, not c.kos, reason)
+    elseif cmd == "merken" or cmd == "profil" then
+        local name, reason = NameAndRest(raw)
+        if not name then Print("Benutzung: /assa merken <Name> [warum er auf der Liste ist]") return true end
+        local c, key = Spy.Find(name)
+        if not c then c, key = GetContact(name, nil, true) end
+        c.saved = true
+        if reason and reason ~= "" then c.note = reason end
+        Print(string.format("%s gemerkt. Profil: Intel-Zentrale, Reiter »Gemerkt«.", c.name))
+        if ns.UI and key then ns.UI.OpenIntel(key) end
+    elseif cmd == "teilen" then
+        local name, to = NameAndRest(raw)
+        local c = name and Spy.Find(name)
+        if not c then Print("Benutzung: /assa teilen <Name> [Spieler]  (ohne Spieler: an die Gilde)") return true end
+        if to and to ~= "" then Spy.ShareProfile(c, "WHISPER", to)
+        else Spy.ShareProfile(c, IsInGuild() and "GUILD" or (ns.Rudel and ns.Rudel.GroupChannel())) end
     elseif cmd == "auftrag" then
         local name, reason = NameAndRest(raw)
         if not name then Print("Benutzung: /assa auftrag <Name> [Grund]") return true end
@@ -779,6 +908,22 @@ function Spy.Slash(cmd, raw, arg)
         Print("Späher öffnet sich bei neuen Feinden: " .. ns.OnOff(ns.Toggle("spyAuto", arg)))
     elseif cmd == "stadt" then
         Print("Ruhig in Städten (nur KOS/Aufträge): " .. ns.OnOff(ns.Toggle("quietResting", arg)))
+    elseif cmd == "neutral" then
+        if arg == "hier" then
+            local z = GetSubZoneText and GetSubZoneText() or ""
+            if z == "" then z = GetRealZoneText and GetRealZoneText() or "" end
+            if z == "" then Print("Kein Ortsname gefunden.") return true end
+            S.neutralOwn = S.neutralOwn or {}
+            local k = z:lower()
+            if S.neutralOwn[k] then S.neutralOwn[k] = nil; Print(string.format("„%s“ ist nicht mehr als neutrale Stadt eingetragen.", z))
+            else S.neutralOwn[k] = true; Print(string.format("„%s“ zählt jetzt als neutrale Stadt.", z)) end
+        else
+            Print("Ruhe in neutralen Städten wie Beutebucht oder Gadgetzan (nur KOS/Aufträge/Fehden): "
+                .. ns.OnOff(ns.Toggle("neutralQuiet", arg)))
+            local here, name = Spy.InNeutralTown()
+            Print(here and string.format("Du bist gerade in einer neutralen Stadt%s.", name and (" (" .. name .. ")") or "")
+                or "Hier ist keine neutrale Stadt. Fehlt ein Ort? Dort /assa neutral hier eingeben.")
+        end
     elseif cmd == "zeilen" then
         local n = tonumber(arg)
         if n and n >= 3 and n <= 25 then S.rows = n end
@@ -829,7 +974,7 @@ function Spy.Init()
     -- Alte, unwichtige Kontakte aufräumen
     local cutoff = time() - KEEP_DAYS * 86400
     for key, c in pairs(contacts) do
-        if (c.last or 0) < cutoff and not c.kos and not c.note and not c.contract
+        if (c.last or 0) < cutoff and not c.kos and not c.note and not c.contract and not c.saved and not c.log and not c.shared
             and (c.wins or 0) == 0 and (c.losses or 0) == 0 then
             contacts[key] = nil
         end
@@ -860,6 +1005,7 @@ function Spy.Init()
     if ns.Bilanz then ns.Bilanz.Init() end
     if ns.Version then ns.Version.Init() end
     if ns.Leiste then ns.Leiste.Init() end
+    Spy.InitSharing()
     if S.plateBoost then pcall(Spy.ApplyPlates, true) end
     C_Timer.NewTicker(1, Spy.Tick)
 end

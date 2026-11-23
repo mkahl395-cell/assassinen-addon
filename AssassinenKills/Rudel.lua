@@ -393,7 +393,7 @@ end
 local function BuildHelpFrame()
     local f = CreateFrame("Frame", "AssassinenHilfeFrame", UIParent, BT)
     helpFrame = f
-    UI.Skin(f, .95)
+    UI.Window(f, .95, { border = 12, dark = true })
     f:SetSize(320, 92)
     f:SetFrameStrata("DIALOG")
     UI.MakeMovable(f, "helpPos")

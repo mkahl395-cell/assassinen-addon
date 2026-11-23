@@ -25,9 +25,18 @@ local scanner, intelFrame, minimapButton, flash
 local scannerRows = {}
 local scannerModes = { { "nah", "Nah" }, { "kos", "KOS" }, { "verlauf", "Verlauf" } }
 
+local D = ns.Design
+local function Book() return D and D.On() end
+
+-- Dunkler Grund mit feinem Rand. Im Blutbuch-Design: zarter Tintenrahmen auf dem Pergament
 local function Skin(f, alpha)
     if not f.SetBackdrop then return end
     f:SetBackdrop(BACKDROP)
+    if Book() then
+        f:SetBackdropColor(.35, .22, .1, .07)
+        f:SetBackdropBorderColor(.35, .22, .12, .45)
+        return
+    end
     f:SetBackdropColor(.03, .025, .03, alpha or .9)
     f:SetBackdropBorderColor(EDGE[1], EDGE[2], EDGE[3])
 end
@@ -42,8 +51,16 @@ local function Art(parent, kind, height, layer)
     return tex
 end
 
--- Hauptfenster: Banner als Hintergrund, zweite Rahmenlinie, Kopf mit Flügelschwert und Schriftzug
+-- Hauptfenster: Banner als Hintergrund, zweite Rahmenlinie, Kopf mit Flügelschwert und Schriftzug.
+-- Im Blutbuch-Design: Pergament im Lederrahmen, Titelschild, Siegel und ein Blutfleck
 local function Decorate(f, subtitle)
+    if Book() then
+        D.Window(f, { border = 18, seal = "BOTTOMRIGHT", sealSize = 52, sealX = 18, sealY = -18, blood = 6, bloodSize = 140 })
+        local wings = Art(f, "wings", 40)
+        wings:SetPoint("TOPLEFT", 16, -10)
+        local _, title = D.Banner(f, subtitle, 260)
+        return title
+    end
     if f.SetBackdropBorderColor then f:SetBackdropBorderColor(RED[1], RED[2], RED[3]) end
     local bg = f:CreateTexture(nil, "BACKGROUND", nil, 1)
     bg:SetTexture(MEDIA .. "bg")
@@ -69,7 +86,30 @@ local function Decorate(f, subtitle)
     return title
 end
 
+-- Knopf im Blutbuch-Design: Leder, Pergament oder Eisen ("x" zum Schließen ist immer Eisen)
+local function BookButton(parent, label, width, onClick, tip, kind)
+    local b = CreateFrame("Button", nil, parent)
+    b:SetSize(width or 18, 16)
+    b.text = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    b.text:SetPoint("CENTER", 0, 0)
+    b.text:SetText(label)
+    b.text:SetShadowColor(0, 0, 0, 0)
+    D.Button(b, kind or (label == "x" and "iron" or "parchment"))
+    b:SetScript("OnClick", onClick)
+    b:SetScript("OnEnter", function(self)
+        D.Hover(self, true)
+        if tip then
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetText(tip, 1, 1, 1, 1, true)
+            GameTooltip:Show()
+        end
+    end)
+    b:SetScript("OnLeave", function(self) D.Hover(self, false); GameTooltip:Hide() end)
+    return b
+end
+
 local function TextButton(parent, label, width, onClick, tip)
+    if Book() then return BookButton(parent, label, width, onClick, tip) end
     local b = CreateFrame("Button", nil, parent, BT)
     b:SetSize(width or 18, 16)
     Skin(b, .9)
@@ -130,17 +170,18 @@ local function HelpButton(parent)
         end
     end)
     b:SetWidth(52)
-    b.text:SetTextColor(1, .85, .85)
+    if Book() then D.SetKind(b, "red") else b.text:SetTextColor(1, .85, .85) end
     HelpLook(b, false)
     b:SetScript("OnEnter", function(self)
         HelpLook(self, true)
+        if self.isSkinned == true then D.Hover(self, true) end
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:AddLine("Hilferuf an die Gilde", 1, .25, .25)
         GameTooltip:AddLine("Schickt deine Position und den Feind an alle Mitglieder mit Addon. Geht auch im Kampf.", .85, .85, .85, true)
         GameTooltip:AddLine("Eigene Taste: Tastaturbelegung → AddOns → Assassinen", .5, .5, .5, true)
         GameTooltip:Show()
     end)
-    b:SetScript("OnLeave", function(self) HelpLook(self, false); GameTooltip:Hide() end)
+    b:SetScript("OnLeave", function(self) HelpLook(self, false); if self.isSkinned == true then D.Hover(self, false) end; GameTooltip:Hide() end)
     b:SetScript("OnUpdate", function(self)
         if self.resetAt and GetTime() >= self.resetAt then self.resetAt = nil; self.text:SetText("Hilfe") end
     end)
@@ -148,7 +189,42 @@ local function HelpButton(parent)
     return b
 end
 
+-- Kopfzeile schmaler Fenster: Flügelschwert, Titel, Trennlinie bei y = -22
+local function Header(f, text)
+    local wings = Art(f, "wings", 18)
+    wings:SetPoint("TOPLEFT", 4, -2)
+    local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("LEFT", wings, "RIGHT", 4, 0)
+    title:SetText(text or "")
+    local rule = f:CreateTexture(nil, "ARTWORK")
+    rule:SetColorTexture(RED[1], RED[2], RED[3], .9)
+    rule:SetHeight(1)
+    rule:SetPoint("TOPLEFT", 1, -22)
+    rule:SetPoint("TOPRIGHT", -1, -22)
+    if Book() then
+        wings:ClearAllPoints()
+        wings:SetPoint("TOPLEFT", 6, -3)
+        D.TitleFont(title, 15)
+        title.noInk = true
+        title:SetTextColor(D.BLOOD[1], D.BLOOD[2], D.BLOOD[3])
+        title:SetShadowColor(0, 0, 0, 0)
+        rule:SetColorTexture(D.BLOOD[1], D.BLOOD[2], D.BLOOD[3], .55)
+        rule:SetPoint("TOPLEFT", 8, -23)
+        rule:SetPoint("TOPRIGHT", -8, -23)
+    end
+    return title, wings, rule
+end
+
+-- Schmales Fenster (Späher, Ziele, Töne …): Pergament im Lederrahmen, sonst dunkel
+local function Window(f, alpha, opts)
+    if Book() then D.Window(f, opts or { border = 12 }) else Skin(f, alpha) end
+end
+
 UI.Skin, UI.TextButton, UI.MakeMovable, UI.RestorePos, UI.Art, UI.Decorate = Skin, TextButton, MakeMovable, RestorePos, Art, Decorate
+UI.Header, UI.Window, UI.Book = Header, Window, Book
+function UI.Ink(f) if Book() then D.Ink(f) end end
+function UI.C(kind) return D and D.C(kind) or "" end
+function UI.Name(c) return Spy.Colored(c, true) end
 UI.HelpButton = HelpButton
 
 local function ClassName(token)
@@ -181,7 +257,15 @@ function UI.ContactTooltip(owner, key, c, hint)
         GameTooltip:AddLine(ct.done and ("Auftrag erfüllt von " .. (ct.doneBy or "?")) or
             ("Gildenauftrag von " .. (ct.by or "?") .. (ct.reason and (": " .. ct.reason) or "")), 1, .82, 0, true)
     end
-    if c.note then GameTooltip:AddLine("Notiz: " .. c.note, 1, 1, 1, true) end
+    if c.saved then GameTooltip:AddLine("Gemerkt (eigenes Profil)", 1, .82, 0) end
+    if c.note then GameTooltip:AddLine("Warum auf der Liste: " .. c.note, 1, 1, 1, true) end
+    for who, s in pairs(c.shared or {}) do
+        if s.reason then GameTooltip:AddLine(who .. ": " .. s.reason, .85, .75, .55, true) end
+    end
+    if c.log and #c.log > 0 then
+        local e = c.log[#c.log]
+        GameTooltip:AddLine(string.format("Zuletzt erlebt (%s): %s", date("%d.%m.", e.t), e.text), .9, .8, .6, true)
+    end
     GameTooltip:AddLine(hint or "Links: Akte öffnen · Rechts: KOS umschalten", .5, .5, .5)
     GameTooltip:Show()
 end
@@ -298,22 +382,14 @@ end
 local function BuildScanner()
     local f = CreateFrame("Frame", "AssassinenScanner", UIParent, BT)
     scanner = f
-    Skin(f, .85)
+    Window(f, .85, { border = 12, seal = "BOTTOMRIGHT", sealSize = 30, sealX = 14, sealY = -14 })
     f:SetSize(256, 40)
     f:SetFrameStrata("MEDIUM")
     MakeMovable(f, "scannerPos")
     RestorePos(f, "scannerPos", "CENTER", UIParent, "CENTER", -380, 160)
 
     -- Der Schriftzug wäre hier zu klein zum Lesen: Flügelschwert und klarer Titel, darunter eine Blutlinie
-    local wings = Art(f, "wings", 18)
-    wings:SetPoint("TOPLEFT", 4, -2)
-    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    f.title:SetPoint("LEFT", wings, "RIGHT", 4, 0)
-    local rule = f:CreateTexture(nil, "ARTWORK")
-    rule:SetColorTexture(RED[1], RED[2], RED[3], .9)
-    rule:SetHeight(1)
-    rule:SetPoint("TOPLEFT", 1, -22)
-    rule:SetPoint("TOPRIGHT", -1, -22)
+    f.title = Header(f)
     f.close = TextButton(f, "x", 16, function() f:Hide(); S.scannerShown = false end, "Schließen (/assa spy)")
     f.close:SetPoint("TOPRIGHT", -4, -4)
     f.intel = TextButton(f, "Intel", 34, function() UI.ToggleIntel() end, "Intel-Zentrale öffnen")
@@ -357,6 +433,7 @@ local function BuildScanner()
         scannerRows[i] = row
     end
 
+    UI.Ink(f)
     if S.scannerShown == false then f:Hide() end
     BuildTargetButtons()
     f:HookScript("OnDragStart", HideTargetButtons)
@@ -375,9 +452,11 @@ local function RefreshScanner()
             local tier = Spy.Tier(e.score)
             row.key, row.c = e.key, e.c
             row.sq:SetColorTexture(tier[3], tier[4], tier[5])
-            row.name:SetText(Marks(e.c) .. Spy.Colored(e.c))
-            row.info:SetText(LevelText(e.c) .. " " .. ClassName(e.c.class))
-            row:SetAlpha((mode[1] == "nah" and e.age and e.age > 20) and .55 or 1)
+            row.name:SetText(Marks(e.c) .. UI.Name(e.c))
+            local cls = ClassName(e.c.class)
+            if Book() then cls = "|c" .. D.ClassHex(e.c.class) .. cls .. "|r" end
+            row.info:SetText(LevelText(e.c) .. " " .. cls)
+            row:SetAlpha((mode[1] == "nah" and e.age and e.age > 20) and (Book() and .8 or .55) or 1)
             row:Show()
         else
             row.key, row.c = nil, nil
@@ -385,8 +464,8 @@ local function RefreshScanner()
         end
     end
     scanner.mode.text:SetText(mode[2])
-    scanner.title:SetText(string.format("|cffe6e1e1Späher|r  |cff8f8a8a%d|r%s", #list,
-        (ns.Jagd and ns.Jagd.Watching()) and "  |cffff4040Wache|r" or ""))
+    scanner.title:SetText(string.format("%sSpäher|r  %s%d|r%s", UI.C("title"), UI.C("dim"), #list,
+        (ns.Jagd and ns.Jagd.Watching()) and ("  " .. UI.C("bad") .. "Wache|r") or ""))
     scanner.empty:SetShown(n == 0)
     scanner.empty:SetText(mode[1] == "nah" and "Keine Feinde in Sicht." or "Liste ist leer.")
     scanner:SetHeight(26 + math.max(n, 1) * ROW_H + 2)
@@ -400,7 +479,7 @@ function UI.ToggleScanner()
 end
 
 function UI.OnContact(key, c, score)
-    if scanner and S.spyAuto and not scanner:IsShown() and not Spy.Muted() then
+    if scanner and S.spyAuto and not scanner:IsShown() and not Spy.Muted() and not Spy.Calm() then
         scanner:Show()
     end
 end
@@ -411,9 +490,10 @@ end
 
 local intelTabs = {
     { "akten", "Akten" }, { "kos", "KOS" }, { "auftraege", "Aufträge" }, { "nemesis", "Nemesis" }, { "opfer", "Opfer" },
-    { "fehde", "Fehden" },
+    { "fehde", "Fehden" }, { "gemerkt", "Gemerkt" },
 }
-local INTEL_ROWS = 18
+local LOG_ROWS = 3
+local INTEL_ROWS = 18 -- im Buch: 15 (siehe BuildIntel)
 
 local function SelectContact(key)
     intelFrame.selected = key
@@ -423,8 +503,16 @@ end
 local function BuildIntel()
     local f = CreateFrame("Frame", "AssassinenIntelFrame", UIParent, BT)
     intelFrame = f
-    Skin(f, .96)
-    f:SetSize(640, 464)
+    local book = Book()
+    local W, H = 640, 464
+    if book then
+        W, H = 660, math.floor(660 / D.BOOK_RATIO)
+        INTEL_ROWS = 15
+        D.Book(f)
+    else
+        Skin(f, .96)
+    end
+    f:SetSize(W, H)
     f:SetFrameStrata("DIALOG")
     MakeMovable(f, "intelPos")
     RestorePos(f, "intelPos", "CENTER", UIParent, "CENTER", 0, 40)
@@ -432,24 +520,34 @@ local function BuildIntel()
     table.insert(UISpecialFrames, "AssassinenIntelFrame") -- Escape schließt
     f.tab, f.offset = "akten", 0
 
-    Decorate(f, "Intel-Zentrale")
+    local leftPage, rightPage
+    if book then
+        D.Banner(f, "Intel-Zentrale", 230)
+        leftPage, rightPage = D.Page(f, "left", W, H), D.Page(f, "right", W, H)
+        D.Seal(f, 48, "BOTTOMRIGHT", -6, 12)
+    else
+        Decorate(f, "Intel-Zentrale")
+    end
     local close = TextButton(f, "x", 18, function() f:Hide() end, "Schließen")
-    close:SetPoint("TOPRIGHT", -8, -8)
+    close:SetPoint("TOPRIGHT", book and -18 or -8, book and -14 or -8)
 
     f.tabButtons = {}
     local prev
-    for _, t in ipairs(intelTabs) do
-        local b = TextButton(f, t[2], 62, function() f.tab, f.offset = t[1], 0; UI.Refresh() end)
-        b:SetHeight(20)
-        if prev then b:SetPoint("LEFT", prev, "RIGHT", 4, 0) else b:SetPoint("TOPLEFT", 12, -56) end
+    for i, t in ipairs(intelTabs) do
+        local b = TextButton(f, t[2], book and 59 or 58, function() f.tab, f.offset = t[1], 0; UI.Refresh() end)
+        b:SetHeight(book and 19 or 20)
+        if book then
+            -- im Buch zwei Reihen zu vier Reitern oben auf der linken Seite
+            b:SetPoint("TOPLEFT", leftPage, "TOPLEFT", ((i - 1) % 4) * 62, -math.floor((i - 1) / 4) * 22)
+        elseif prev then b:SetPoint("LEFT", prev, "RIGHT", 4, 0) else b:SetPoint("TOPLEFT", 12, -56) end
         b.id = t[1]
         f.tabButtons[#f.tabButtons + 1] = b
         prev = b
     end
 
     f.search = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
-    f.search:SetSize(150, 20)
-    f.search:SetPoint("TOPRIGHT", -14, -56)
+    f.search:SetSize(book and 180 or 150, 20)
+    if book then f.search:SetPoint("TOPRIGHT", leftPage, "TOPRIGHT", -4, -46) else f.search:SetPoint("TOPRIGHT", -14, -56) end
     f.search:SetAutoFocus(false)
     f.search:SetScript("OnTextChanged", function() f.offset = 0; UI.Refresh() end)
     f.search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
@@ -460,8 +558,9 @@ local function BuildIntel()
     -- Liste links
     local list = CreateFrame("Frame", nil, f, BT)
     Skin(list, .6)
-    list:SetPoint("TOPLEFT", 12, -84)
-    list:SetSize(300, INTEL_ROWS * 18 + 8)
+    if book then list:SetPoint("TOPLEFT", leftPage, "TOPLEFT", 0, -72) else list:SetPoint("TOPLEFT", 12, -84) end
+    local rowW = book and 236 or 292
+    list:SetSize(rowW + 8, INTEL_ROWS * 18 + 8)
     list:EnableMouseWheel(true)
     list:SetScript("OnMouseWheel", function(_, delta)
         f.offset = math.max(0, f.offset - delta * 3)
@@ -470,14 +569,14 @@ local function BuildIntel()
     f.rows = {}
     for i = 1, INTEL_ROWS do
         local row = CreateFrame("Button", nil, list)
-        row:SetSize(292, 18)
+        row:SetSize(rowW, 18)
         row:SetPoint("TOPLEFT", 4, -4 - (i - 1) * 18)
         row.hl = row:CreateTexture(nil, "HIGHLIGHT")
         row.hl:SetAllPoints()
         row.hl:SetColorTexture(.8, .1, .2, .25)
         row.sel = row:CreateTexture(nil, "BACKGROUND")
         row.sel:SetAllPoints()
-        row.sel:SetColorTexture(.8, .1, .2, .45)
+        if book then row.sel:SetColorTexture(.55, .08, .04, .22) else row.sel:SetColorTexture(.8, .1, .2, .45) end
         row.sq = row:CreateTexture(nil, "ARTWORK")
         row.sq:SetSize(8, 8)
         row.sq:SetPoint("LEFT", 3, 0)
@@ -493,74 +592,172 @@ local function BuildIntel()
 
     -- Akte rechts
     local d = CreateFrame("Frame", nil, f, BT)
-    Skin(d, .6)
-    d:SetPoint("TOPLEFT", list, "TOPRIGHT", 10, 0)
-    d:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -12, 38)
+    if book then
+        d:SetAllPoints(rightPage)
+    else
+        Skin(d, .6)
+        d:SetPoint("TOPLEFT", list, "TOPRIGHT", 10, 0)
+        d:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -12, 38)
+    end
     f.detail = d
-    d.emblem = Art(d, "logo", 240)
+    d.emblem = Art(d, "logo", book and 190 or 240)
     d.emblem:SetPoint("CENTER", 0, -6)
-    d.emblem:SetAlpha(.75)
+    d.emblem:SetAlpha(book and .4 or .75)
     local function Line(font, y, anchor)
         local fs = d:CreateFontString(nil, "OVERLAY", font)
-        fs:SetPoint("TOPLEFT", anchor or d, anchor and "BOTTOMLEFT" or "TOPLEFT", anchor and 0 or 10, y)
-        fs:SetWidth(280)
+        fs:SetPoint("TOPLEFT", anchor or d, anchor and "BOTTOMLEFT" or "TOPLEFT", anchor and 0 or (book and 2 or 10), y)
+        fs:SetWidth(book and 232 or 280)
         fs:SetJustifyH("LEFT")
         return fs
     end
-    d.name = Line("GameFontNormalLarge", -10)
+    d.name = Line("GameFontNormalLarge", book and -2 or -10)
+    if book then D.TitleFont(d.name, 20) end
     d.sub = Line("GameFontHighlightSmall", -4, d.name)
-    d.guild = Line("GameFontDisableSmall", -2, d.sub)
-    d.threat = Line("GameFontNormal", -10, d.guild)
-    d.record = Line("GameFontHighlight", -6, d.threat)
-    d.seen = Line("GameFontHighlightSmall", -6, d.record)
-    d.where = Line("GameFontHighlightSmall", -2, d.seen)
+    d.threat = Line("GameFontNormalSmall", -5, d.sub)
+    d.where = Line("GameFontHighlightSmall", -3, d.threat)
     d.report = Line("GameFontDisableSmall", -2, d.where)
-    d.contract = Line("GameFontNormalSmall", -8, d.report)
+    d.contract = Line("GameFontNormalSmall", -2, d.report)
 
-    d.noteLabel = Line("GameFontDisableSmall", -10, d.contract)
-    d.noteLabel:SetText("Notiz")
-    d.note = CreateFrame("EditBox", nil, d, "InputBoxTemplate")
-    d.note:SetSize(270, 20)
-    d.note:SetPoint("TOPLEFT", d.noteLabel, "BOTTOMLEFT", 6, -2)
-    d.note:SetAutoFocus(false)
+    -- Eigenes Profil: warum auf der Liste, Erlebnisse mit Datum
+    local function Box(anchor, w)
+        local e = CreateFrame("EditBox", nil, d, "InputBoxTemplate")
+        e:SetSize(w, 20)
+        e:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 6, -2)
+        e:SetAutoFocus(false)
+        e:SetMaxLetters(200)
+        e:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        return e
+    end
+    local boxW = book and 222 or 270
+    d.noteLabel = Line("GameFontNormalSmall", -10, d.contract)
+    d.noteLabel:SetText("Warum auf der Liste")
+    d.note = Box(d.noteLabel, boxW)
     d.note:SetScript("OnEnterPressed", function(self)
         local c = Spy.Get(intelFrame.selected)
-        if c then c.note = self:GetText() ~= "" and self:GetText() or nil end
+        if c then c.note = self:GetText() ~= "" and self:GetText() or nil; c.saved = true end
         self:ClearFocus()
         UI.Refresh()
     end)
-    d.note:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    d.note:SetScript("OnEditFocusLost", function(self)
+        local c = Spy.Get(intelFrame.selected)
+        if c and (self:GetText() or "") ~= (c.note or "") then c.note = self:GetText() ~= "" and self:GetText() or nil end
+    end)
+    -- Was andere über ihn geteilt haben
+    d.shared = d:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    d.shared:SetPoint("TOPLEFT", d.note, "BOTTOMLEFT", -6, -3)
+    d.shared:SetWidth(book and 232 or 280)
+    d.shared:SetJustifyH("LEFT")
+    if d.shared.SetWordWrap then d.shared:SetWordWrap(false) end
+    d.logLabel = Line("GameFontNormalSmall", -6, d.note)
+    d.logLabel:ClearAllPoints()
+    d.logLabel:SetPoint("TOPLEFT", d.shared, "BOTTOMLEFT", 0, -5)
+    d.share = TextButton(d, "Teilen", 56, function()
+        local c = Spy.Get(intelFrame.selected)
+        if not c then return end
+        if IsShiftKeyDown and IsShiftKeyDown() then
+            Spy.ShareProfile(c, ns.Rudel and ns.Rudel.GroupChannel())
+        elseif IsControlKeyDown and IsControlKeyDown() then
+            local who = ns.Safe(UnitName("target"))
+            if who and ns.Safe(UnitIsPlayer("target")) and not ns.Safe(UnitIsEnemy("player", "target")) then
+                Spy.ShareProfile(c, "WHISPER", who)
+            else
+                ns.Print("Strg+Klick teilt mit dem Spieler im Ziel – nimm zuerst ein Gildenmitglied oder einen Freund ins Ziel.")
+            end
+        else
+            Spy.ShareProfile(c, IsInGuild() and "GUILD" or (ns.Rudel and ns.Rudel.GroupChannel()))
+        end
+    end, "Profil teilen (Grund und deine letzten 5 Erlebnisse)\nKlick: mit der Gilde\nShift+Klick: mit der Gruppe\nStrg+Klick: mit dem Spieler im Ziel")
+    d.share:SetHeight(18)
+    d.share:SetPoint("BOTTOMRIGHT", d.note, "TOPRIGHT", 0, 3)
+    d.logLabel:SetText("Erlebnisse")
+    d.logInput = Box(d.logLabel, boxW)
+    d.logInput:SetScript("OnEnterPressed", function(self)
+        local c = Spy.Get(intelFrame.selected)
+        if c then Spy.AddLog(c, self:GetText()) end
+        self:SetText("")
+        self:ClearFocus()
+    end)
+    d.logHint = d:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    d.logHint:SetPoint("LEFT", d.logInput, "LEFT", 2, 0)
+    d.logHint:SetText("Neues Erlebnis eintippen, Enter speichert")
+    d.logInput:SetScript("OnEditFocusGained", function() d.logHint:Hide() end)
+    d.logInput:SetScript("OnEditFocusLost", function(self) d.logHint:SetShown((self:GetText() or "") == "") end)
+    d.logRows = {}
+    local prevRow = d.logInput
+    for i = 1, LOG_ROWS do
+        local r = CreateFrame("Button", nil, d)
+        r:SetSize(book and 232 or 280, 26)
+        r:SetPoint("TOPLEFT", prevRow, "BOTTOMLEFT", i == 1 and -6 or 0, i == 1 and -4 or 0)
+        r.text = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        r.text:SetAllPoints()
+        r.text:SetJustifyH("LEFT")
+        r.text:SetJustifyV("TOP")
+        r:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        r:SetScript("OnClick", function(self, button)
+            local c = Spy.Get(intelFrame.selected)
+            if c and self.index and button == "RightButton" and IsShiftKeyDown and IsShiftKeyDown() then Spy.DelLog(c, self.index) end
+        end)
+        r:SetScript("OnEnter", function(self)
+            local c = Spy.Get(intelFrame.selected)
+            local e = c and c.log and self.index and c.log[self.index]
+            if not e then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(date("%d.%m.%Y %H:%M", e.t) .. (e.zone and ("  ·  " .. e.zone) or ""), 1, .82, 0)
+            GameTooltip:AddLine(e.text, 1, 1, 1, true)
+            GameTooltip:AddLine("Shift+Rechtsklick: Eintrag löschen", .5, .5, .5)
+            GameTooltip:Show()
+        end)
+        r:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        d.logRows[i] = r
+        prevRow = r
+    end
+    d.logMore = d:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    d.logMore:SetPoint("TOPLEFT", prevRow, "BOTTOMLEFT", 0, 0)
 
-    d.kos = TextButton(d, "KOS", 70, function()
+    local bw = book and { 44, 60, 60, 66 } or { 50, 70, 70, 74 }
+    d.kos = TextButton(d, "KOS", bw[1], function()
         local c = Spy.Get(intelFrame.selected)
         if c then Spy.SetKos(c, not c.kos, "") end
     end, "Auf die KOS-Liste setzen oder entfernen")
     d.kos:SetHeight(22)
-    d.kos:SetPoint("BOTTOMLEFT", 10, 10)
-    d.contractBtn = TextButton(d, "Auftrag erteilen", 110, function()
+    d.kos:SetPoint("BOTTOMLEFT", book and 0 or 10, book and 4 or 10)
+    d.save = TextButton(d, "Merken", bw[2], function()
+        local c = Spy.Get(intelFrame.selected)
+        if c then Spy.SetSaved(c, not c.saved) end
+    end, "Im eigenen Profil merken (Reiter »Gemerkt«). Nur für dich, wird nicht geteilt.")
+    d.save:SetHeight(22)
+    d.save:SetPoint("LEFT", d.kos, "RIGHT", 3, 0)
+    d.contractBtn = TextButton(d, "Auftrag", bw[3], function()
         local c = Spy.Get(intelFrame.selected)
         if c then Spy.SetContract(c, d.note:GetText() or "") end
-    end, "Gildenauftrag: alle Assassinen mit dem Addon bekommen das Ziel auf ihre KOS-Liste. Die Notiz wird als Grund mitgeschickt.")
+    end, "Gildenauftrag: alle Assassinen mit dem Addon bekommen das Ziel auf ihre KOS-Liste. »Warum auf der Liste« wird als Grund mitgeschickt.")
     d.contractBtn:SetHeight(22)
-    d.contractBtn:SetPoint("LEFT", d.kos, "RIGHT", 6, 0)
-    d.forget = TextButton(d, "Vergessen", 74, function()
+    d.contractBtn:SetPoint("LEFT", d.save, "RIGHT", 3, 0)
+    d.forget = TextButton(d, "Vergessen", bw[4], function()
         if intelFrame.selected then Spy.Forget(intelFrame.selected); intelFrame.selected = nil end
-    end, "Akte löschen")
+    end, "Akte mit Profil und Erlebnissen löschen")
     d.forget:SetHeight(22)
-    d.forget:SetPoint("LEFT", d.contractBtn, "RIGHT", 6, 0)
+    d.forget:SetPoint("LEFT", d.contractBtn, "RIGHT", 3, 0)
 
     f.summary = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    f.summary:SetPoint("BOTTOMLEFT", 14, 14)
+    if book then
+        f.summary:SetPoint("BOTTOMLEFT", leftPage, "BOTTOMLEFT", 0, 0)
+        f.summary:SetWidth(240)
+    else
+        f.summary:SetPoint("BOTTOMLEFT", 14, 14)
+    end
     f.summary:SetJustifyH("LEFT")
 
     f:SetScript("OnShow", function() UI.Refresh() end)
+    UI.Ink(f)
 end
 
 local function RefreshIntel()
     if not intelFrame or not intelFrame:IsShown() then return end
     local f = intelFrame
     for _, b in ipairs(f.tabButtons) do
-        b.text:SetTextColor(b.id == f.tab and 1 or .7, b.id == f.tab and 1 or .67, b.id == f.tab and 1 or .67)
+        if b.isSkinned == true then D.SetKind(b, b.id == f.tab and "red" or "parchment") end
+        if b.isSkinned ~= true then b.text:SetTextColor(b.id == f.tab and 1 or .7, b.id == f.tab and 1 or .67, b.id == f.tab and 1 or .67) end
         if b.SetBackdropColor then
             if b.id == f.tab then b:SetBackdropColor(RED[1], RED[2], RED[3], .9) else b:SetBackdropColor(.09, .08, .09, .95) end
         end
@@ -574,12 +771,15 @@ local function RefreshIntel()
             local tier = Spy.Tier(e.score)
             row.key, row.c = e.key, e.c
             row.sq:SetColorTexture(tier[3], tier[4], tier[5])
-            row.name:SetText(Marks(e.c) .. Spy.Colored(e.c))
+            row.name:SetText(Marks(e.c) .. UI.Name(e.c))
             local info
             if f.tab == "nemesis" then info = string.format("%d× gefallen", e.c.losses or 0)
             elseif f.tab == "opfer" then info = string.format("%d× getötet", e.c.wins or 0)
             elseif f.tab == "auftraege" then info = e.c.contract.done and "erfüllt" or ("von " .. (e.c.contract.by or "?"))
             elseif f.tab == "fehde" then info = "<" .. (e.c.guild or "?") .. ">"
+            elseif f.tab == "gemerkt" then
+                info = (e.c.log and #e.c.log > 0) and string.format("%d Erlebnis%s", #e.c.log, #e.c.log == 1 and "" or "se")
+                    or (e.c.shared and "geteilt") or LevelText(e.c)
             else info = string.format("%s · %d", LevelText(e.c), e.score) end
             row.info:SetText(info)
             row.sel:SetShown(e.key == f.selected)
@@ -591,27 +791,44 @@ local function RefreshIntel()
     end
 
     local d, c = f.detail, Spy.Get(f.selected)
-    for _, w in ipairs({ d.kos, d.contractBtn, d.forget, d.note, d.noteLabel }) do w:SetShown(c ~= nil) end
+    for _, w in ipairs({ d.kos, d.save, d.contractBtn, d.forget, d.note, d.noteLabel, d.logLabel, d.logInput, d.share, d.shared }) do w:SetShown(c ~= nil) end
+    local others = {}
+    for who, s in pairs(c and c.shared or {}) do
+        others[#others + 1] = who .. (s.reason and (": " .. s.reason) or (s.kos and ": KOS" or ""))
+    end
+    table.sort(others)
+    d.shared:SetText(#others > 0 and ("Andere: " .. table.concat(others, "  ·  ")) or "")
+    d.logHint:SetShown(c ~= nil and not d.logInput:HasFocus() and (d.logInput:GetText() or "") == "")
     d.emblem:SetShown(c == nil)
+    local entries = c and c.log or {}
+    for i, r in ipairs(d.logRows) do
+        local idx = #entries - i + 1
+        local e = entries[idx]
+        r.index = e and idx or nil
+        r.text:SetText(e and string.format("%s%s|r  %s%s", UI.C("gray"), date("%d.%m.", e.t), e.text,
+            e.by and string.format("  %s(%s)|r", UI.C("gray"), e.by) or "") or "")
+        r:SetShown(e ~= nil)
+    end
+    d.logMore:SetText(#entries > LOG_ROWS and string.format("… und %d ältere (Tooltip zeigt alles)", #entries - LOG_ROWS) or "")
     if not c then
-        d.name:SetText("|cffaaaaaaWähle links einen Feind.|r")
-        for _, fs in ipairs({ d.sub, d.guild, d.threat, d.record, d.seen, d.where, d.report, d.contract }) do fs:SetText("") end
+        d.name:SetText(UI.C("gray") .. "Wähle links einen Feind.|r")
+        for _, fs in ipairs({ d.sub, d.threat, d.where, d.report, d.contract }) do fs:SetText("") end
     else
         local score = Spy.Threat(f.selected, c)
         local tier = Spy.Tier(score)
-        d.name:SetText(Marks(c) .. Spy.Colored(c))
-        d.sub:SetText(string.format("Stufe %s %s %s · %s", LevelText(c), c.race or "", ClassName(c.class), c.realm or ""))
-        d.guild:SetText(c.guild and ("<" .. c.guild .. ">") or "keine Gilde bekannt")
-        d.threat:SetText(string.format("Bedrohung: %d – %s", score, tier[2]))
-        d.threat:SetTextColor(tier[3], tier[4], tier[5])
-        d.record:SetText(string.format("Bilanz: |cff00ff00%d|r : |cffff4040%d|r", c.wins or 0, c.losses or 0))
-        d.seen:SetText(string.format("%d× gesichtet, zuerst %s", c.seen or 0, Spy.Ago(c.first)))
-        d.where:SetText(string.format("Zuletzt: %s%s, %s", c.zone or "?", (c.sub and c.sub ~= "") and (" – " .. c.sub) or "", Spy.Ago(c.last)))
+        d.name:SetText(Marks(c) .. UI.Name(c))
+        d.sub:SetText(string.format("Stufe %s %s %s%s", LevelText(c), c.race or "", ClassName(c.class), c.guild and ("  ·  <" .. c.guild .. ">") or ""))
+        d.threat:SetText(string.format("Bedrohung %d (%s)  ·  Bilanz %s%d|r : %s%d|r", score, tier[2], UI.C("good"), c.wins or 0, UI.C("bad"), c.losses or 0))
+        d.threat:SetTextColor(D.Ink3(tier[3], tier[4], tier[5]))
+        d.where:SetText(string.format("Zuletzt: %s%s, %s  ·  %d× gesehen", c.zone or "?", (c.sub and c.sub ~= "") and (" – " .. c.sub) or "", Spy.Ago(c.last), c.seen or 0))
         d.report:SetText(c.reported and string.format("Gemeldet von %s %s", c.reportBy or "?", Spy.Ago(c.reported)) or "")
         local ct = c.contract
-        d.contract:SetText(ct and (ct.done and string.format("|cff00ff00Auftrag erfüllt|r von %s", ct.doneBy or "?")
-            or string.format("|cffff2020Offener Auftrag|r von %s%s", ct.by or "?", ct.reason and (": " .. ct.reason) or "")) or "")
-        d.kos.text:SetText(c.kos and "KOS entf." or "KOS")
+        d.contract:SetText(ct and (ct.done and string.format("%sAuftrag erfüllt|r von %s", UI.C("good"), ct.doneBy or "?")
+            or string.format("%sOffener Auftrag|r von %s%s", UI.C("bad"), ct.by or "?", ct.reason and (": " .. ct.reason) or "")) or "")
+        d.kos.text:SetText(c.kos and "KOS weg" or "KOS")
+        d.save.text:SetText(c.saved and "Gemerkt" or "Merken")
+        if d.save.isSkinned == true then D.SetKind(d.save, c.saved and "red" or "parchment") end
+        if d.kos.isSkinned == true then D.SetKind(d.kos, c.kos and "red" or "parchment") end
         if not d.note:HasFocus() then d.note:SetText(c.note or "") end
     end
 
@@ -622,8 +839,12 @@ local function RefreshIntel()
         if e.c.contract and not e.c.contract.done then open = open + 1 end
         w, l = w + (e.c.wins or 0), l + (e.c.losses or 0)
     end
-    f.summary:SetText(string.format("Akten: %d   ·   KOS: %d   ·   offene Aufträge: %d   ·   Gesamtbilanz: |cff00ff00%d|r : |cffff4040%d|r",
-        total, kos, open, w, l))
+    if Book() then
+        f.summary:SetText(string.format("Akten %d  ·  KOS %d  ·  Aufträge %d\nBilanz %s%d|r : %s%d|r", total, kos, open, UI.C("good"), w, UI.C("bad"), l))
+    else
+        f.summary:SetText(string.format("Akten: %d   ·   KOS: %d   ·   offene Aufträge: %d   ·   Gesamtbilanz: %s%d|r : %s%d|r",
+            total, kos, open, UI.C("good"), w, UI.C("bad"), l))
+    end
 end
 
 function UI.ToggleIntel()

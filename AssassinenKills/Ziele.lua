@@ -75,17 +75,13 @@ end
 local function Build()
     local f = CreateFrame("Frame", "AssassinenZielliste", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
     frame = f
-    UI.Skin(f, .9)
+    UI.Window(f, .9, { border = 12, seal = "BOTTOMRIGHT", sealSize = 28, sealX = 14, sealY = -14 })
     f:SetSize(WIDTH, 26 + 16 + ROWS * ROW_H + 16 + ROWS * ROW_H + 8)
     f:SetFrameStrata("MEDIUM")
     UI.MakeMovable(f, "targetListPos")
     UI.RestorePos(f, "targetListPos", "CENTER", UIParent, "CENTER", -380, -60)
 
-    local wings = UI.Art(f, "wings", 18)
-    wings:SetPoint("TOPLEFT", 4, -2)
-    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    f.title:SetPoint("LEFT", wings, "RIGHT", 4, 0)
-    f.title:SetText("|cffe6e1e1Ziele|r")
+    f.title = UI.Header(f, UI.C("title") .. "Ziele|r")
     local close = UI.TextButton(f, "x", 16, function() Ziele.Toggle() end, "Schließen (/assa ziele)")
     close:SetPoint("TOPRIGHT", -4, -4)
     f.help = UI.HelpButton(f)
@@ -93,11 +89,6 @@ local function Build()
     -- Kampfhinweis rechts in der Rudel-Zeile, damit er die Kopfzeile nicht überdeckt
     f.state = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     f.state:SetPoint("TOPRIGHT", -8, -27)
-    local rule = f:CreateTexture(nil, "ARTWORK")
-    rule:SetColorTexture(.5, .07, .09, .9)
-    rule:SetHeight(1)
-    rule:SetPoint("TOPLEFT", 1, -22)
-    rule:SetPoint("TOPRIGHT", -1, -22)
 
     local y = -26
     Section("Rudel", y)
@@ -116,6 +107,7 @@ local function Build()
         enemyRows[i] = row
         y = y - ROW_H
     end
+    UI.Ink(f)
     if not S.targetListShown then f:Hide() end
 end
 
@@ -177,7 +169,7 @@ local function Enemies(friends)
             local tier = Spy.Tier(e.score)
             local marks = (c.contract and not c.contract.done) and "Auftrag" or c.kos and "KOS" or nil
             out[#out + 1] = { name = c.name, realm = c.realm, class = c.class, color = { tier[3], tier[4], tier[5] },
-                info = (marks and ("|cffff4040" .. marks .. "|r ") or "") .. (c.level and (c.level > 0 and c.level or "??") or "?"),
+                info = (marks and (UI.C("bad") .. marks .. "|r ") or "") .. (c.level and (c.level > 0 and c.level or "??") or "?"),
                 tip = string.format("Bedrohung %d (%s)%s", e.score, tier[2], c.guild and (" · <" .. c.guild .. ">") or "") }
         end
     end
@@ -191,7 +183,7 @@ local function Fill(rows, list, isEnemy)
         row.entry = e
         if e then
             row:SetAttribute("macrotext", "/targetexact " .. Target(e.name, e.realm))
-            row.name:SetText("|c" .. ns.ClassColor(e.class) .. e.name .. "|r")
+            row.name:SetText("|c" .. (UI.Book() and ns.Design.InkHex() or ns.ClassColor(e.class)) .. e.name .. "|r")
             row.info:SetText(e.info or "")
             if isEnemy then row.sq:SetColorTexture(e.color[1], e.color[2], e.color[3])
             else

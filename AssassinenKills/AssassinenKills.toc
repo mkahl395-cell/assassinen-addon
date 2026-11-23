@@ -3,11 +3,12 @@
 ## Notes: Kills, Screenshots, Späher, Jagdkarte, Hilferuf, Zielansage, Pfeil, Sammelpunkt, Countdown, Wachposten, Kommando-Leiste, Alarme, Rangliste und Kontor für die Gilde Assassinen.
 ## Notes-deDE: Kills, Screenshots, Späher, Jagdkarte, Hilferuf, Zielansage, Pfeil, Sammelpunkt, Countdown, Wachposten, Kommando-Leiste, Alarme, Rangliste und Kontor für die Gilde Assassinen.
 ## Author: Gilde Assassinen
-## Version: 1.10.5
+## Version: 1.11.0
 ## SavedVariables: AssassinenKillsDB
 ## IconTexture: Interface\Icons\Ability_Stealth
 
 AssassinenKills.lua
+Design.lua
 Spy.lua
 UI.lua
 Toene.lua

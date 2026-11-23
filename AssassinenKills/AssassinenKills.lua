@@ -21,6 +21,7 @@ local defaults = {
     spyAuto = true,      -- Späher-Fenster öffnet sich bei neuen Feinden
     spySound = true,     -- Töne bei Feinden
     quietResting = true, -- in Städten/Gasthäusern nur bei KOS/Aufträgen warnen
+    neutralQuiet = true, -- in neutralen Städten (Beutebucht, Gadgetzan …) nur bei KOS/Aufträgen/Fehden warnen
     guildSync = true,    -- Sichtungen und Aufträge mit der Gilde teilen
     autoKos = false,     -- nach 3 Niederlagen gegen jemanden automatisch KOS
     rows = 10,           -- Zeilen im Späher-Fenster
@@ -39,6 +40,8 @@ local defaults = {
     outnumber = 3,       -- Übermacht-Warnung ab so vielen Feinden gleichzeitig (0 = aus)
     autoJoin = true,     -- Rudel-Einladungen von Mitgliedern automatisch annehmen
     plateBoost = true,   -- Feind-Plaketten an und Reichweite aufs Maximum (größere Späher-Reichweite)
+    design = "buch",     -- Aussehen der Fenster: "buch" (Pergament und Leder) oder "dunkel"
+    killCard = true,     -- Steckbrief in der Bildschirmmitte bei jedem Kill
 }
 
 local band = bit.band
@@ -485,6 +488,7 @@ StoreKill = function(rec, guid)
     if ns.Rudel then ns.Rudel.OnKill(rec) end
 
     if settings.screenshots then QueueScreenshot(rec) end
+    if ns.Design then pcall(ns.Design.KillCard, rec, #char.kills) end
 
     local total = #char.kills
     if settings.chat then
@@ -729,6 +733,15 @@ SlashCmdList.ASSASSINEN = function(input)
         local v = tonumber(arg)
         if v and v >= 0 and v <= 5 then settings.delay = v end
         Print(string.format("Screenshot-Verzögerung: %.1f s", settings.delay))
+    elseif cmd == "design" then
+        if arg == "buch" or arg == "dunkel" then
+            settings.design = arg
+            Print("Design: " .. arg .. " – wird nach /reload übernommen.")
+        else
+            Print("Design: " .. (settings.design or "buch") .. ". Umschalten: /assa design buch | dunkel (danach /reload)")
+        end
+    elseif cmd == "steckbrief" then
+        Print("Steckbrief bei Kills: " .. OnOff(Toggle("killCard", arg)))
     elseif cmd == "todesstoss" or cmd == "todesstoß" or cmd == "kb" then
         ns.KbReport(arg)
     elseif cmd == "letzte" or cmd == "last" then
@@ -744,14 +757,15 @@ SlashCmdList.ASSASSINEN = function(input)
     else
         PrintStats()
         Print("Kills: /assa stats | letzte | todesstoss [an|aus] | shots [an|aus] | ansage [an|aus] | delay <sek>")
-        Print("Addon: /assa versionen (wer hat welche Version) | update (wie aktualisieren)")
-        Print("Späher: /assa spy | intel | kos <Name> [Grund] | auftrag <Name> [Grund] | akte <Name>")
+        Print("Addon: /assa versionen (wer hat welche Version) | update (wie aktualisieren) | design buch|dunkel | steckbrief [an|aus]")
+        Print("Späher: /assa spy | intel | kos <Name> [Grund] | auftrag <Name> [Grund] | akte <Name> | merken <Name> [Grund] | teilen <Name> [Spieler]")
         Print("        /assa töne  (Fenster: Ton für jede Warnung wählen)  ·  /assa töne an|aus")
         Print("        /assa ruhe [Minuten|aus] | töne [an|aus] | sync [an|aus] | autokos [an|aus] | zeilen <n> | minimap")
         Print("        /assa plaketten [an|aus]  (Späher-Reichweite: Feind-Plaketten an, Reichweite aufs Maximum)")
         Print("Rudel: /assa hilfe [aus] | komme | ziel | plan [Namen] | bereit [gilde] | fehde <Gilde> | fehden")
         Print("       /assa rudel (Rudel in der Nähe einladen) | autorudel [an|aus] | radar | rang | bilanz")
         Print("       /assa imziel [an|aus] | tarnalarm [an|aus] | uebermacht [Zahl|aus]  (Warnungen)")
+        Print("       /assa neutral [an|aus|hier]  (Ruhe in Beutebucht, Gadgetzan & Co.)")
         Print("       /assa leiste  (Kommando-Leiste: Hilfe, Ziel, Plan, Los, Sammeln, Wache, KOS … alles per Klick)")
         Print("       /assa ziele  (Zielliste: Rudel und Feinde per Klick oder Taste anvisieren)")
         Print("       /assa sammeln [Text|aus]  (Sammelpunkt hier; Alt+Klick auf die Weltkarte setzt ihn dort)")

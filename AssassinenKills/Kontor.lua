@@ -359,8 +359,8 @@ local function BuildFrame()
     table.insert(UISpecialFrames, "AssassinenKontorFrame")
     f.offset = 0
 
-    UI.Decorate(f, "Kontor  |cffaaaaaa– Aufträge von Auftraggebern|r")
-    UI.TextButton(f, "x", 18, function() f:Hide() end, "Schließen"):SetPoint("TOPRIGHT", -8, -8)
+    UI.Decorate(f, UI.Book() and "Kontor" or "Kontor  |cffaaaaaa– Aufträge von Auftraggebern|r")
+    UI.TextButton(f, "x", 18, function() f:Hide() end, "Schließen"):SetPoint("TOPRIGHT", UI.Book() and -16 or -8, UI.Book() and -14 or -8)
 
     local list = CreateFrame("Frame", nil, f, BackdropTemplateMixin and "BackdropTemplate" or nil)
     UI.Skin(list, .6)
@@ -449,20 +449,21 @@ local function BuildFrame()
     f.summary = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     f.summary:SetPoint("BOTTOMLEFT", 14, 14)
     f:SetScript("OnShow", function() K.Refresh() end)
+    UI.Ink(f)
 end
 
 local function BuildMailPanel()
     local UI = ns.UI
     local p = CreateFrame("Frame", "AssassinenKontorMail", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
     mailPanel = p
-    UI.Skin(p, .95)
+    UI.Window(p, .95, { border = 12 })
     p:SetSize(260, 120)
     p:SetFrameStrata("HIGH")
     if MailFrame then p:SetPoint("TOPLEFT", MailFrame, "TOPRIGHT", 6, -20) else p:SetPoint("CENTER", -300, 0) end
     p:Hide()
     p.title = p:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     p.title:SetPoint("TOPLEFT", 10, -8)
-    p.title:SetText("|cffc41e3aAssassinen|r |cffd9b56bKontor-Post|r")
+    p.title:SetText(UI.Book() and (UI.C("title") .. "Assassinen Kontor-Post|r") or "|cffc41e3aAssassinen|r |cffd9b56bKontor-Post|r")
     p.out = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     p.out:SetPoint("TOPLEFT", 10, -28)
     p.out:SetWidth(240)
@@ -475,6 +476,7 @@ local function BuildMailPanel()
     p.take = UI.TextButton(p, "Gold nehmen", 90, function() K.TakeNext() end, "Gold aus dem nächsten Zahlungsbrief entnehmen")
     p.take:SetHeight(20)
     p.take:SetPoint("TOPRIGHT", -10, -88)
+    UI.Ink(p)
 end
 
 function K.Refresh()
@@ -503,9 +505,9 @@ function K.Refresh()
         if c then
             local st = K.STATUS[c.status] or { c.status, 1, 1, 1 }
             row.id = c.id
-            row.name:SetText(string.format("%s |cffaaaaaa(%dg)|r", c.target, c.gold))
+            row.name:SetText(string.format("%s %s(%dg)|r", c.target, ns.UI.C("gray"), c.gold))
             row.status:SetText(st[1])
-            row.status:SetTextColor(st[2], st[3], st[4])
+            row.status:SetTextColor(ns.Design.Ink3(st[2], st[3], st[4]))
             row.sel:SetShown(c.id == frame.selected)
             row:Show()
         else
@@ -518,20 +520,21 @@ function K.Refresh()
     local function Show(w, on) w:SetShown(on and true or false) end
     Show(d.emblem, not c)
     if not c then
-        d.title:SetText("|cffaaaaaaWähle links einen Auftrag.|r")
+        d.title:SetText(ns.UI.C("gray") .. "Wähle links einen Auftrag.|r")
         for _, fs in ipairs({ d.status, d.client, d.deal, d.reason, d.pay, d.progress, d.info }) do fs:SetText("") end
         for _, w in ipairs({ d.accept, d.decline, d.give, d.complete, d.refund, d.block, d.assignee, d.reward, d.assignLabel }) do Show(w, false) end
     else
         local st = K.STATUS[c.status] or { c.status, 1, 1, 1 }
-        d.title:SetText(string.format("Auftrag #%s: |c%s%s|r", c.id, ns.ClassColor(c.class), c.target))
+        local ink = ns.UI.Book()
+        d.title:SetText(string.format("Auftrag #%s: |c%s%s|r", c.id, ink and ns.Design.ClassHex(c.class) or ns.ClassColor(c.class), c.target))
         d.status:SetText(st[1])
-        d.status:SetTextColor(st[2], st[3], st[4])
-        d.client:SetText(string.format("Auftraggeber: |cffffd100%s|r%s · %s", c.client, c.anon and " (anonym)" or "", date("%d.%m. %H:%M", c.created)))
-        d.deal:SetText(string.format("%d Kill%s für |cffffd100%dg|r%s", c.kills, c.kills == 1 and "" or "s", c.gold,
+        d.status:SetTextColor(ns.Design.Ink3(st[2], st[3], st[4]))
+        d.client:SetText(string.format("Auftraggeber: %s%s|r%s · %s", ns.UI.C("gold"), c.client, c.anon and " (anonym)" or "", date("%d.%m. %H:%M", c.created)))
+        d.deal:SetText(string.format("%d Kill%s für %s%dg|r%s", c.kills, c.kills == 1 and "" or "s", ns.UI.C("gold"), c.gold,
             c.level and (" · Ziel Stufe " .. (c.level > 0 and c.level or "??")) or ""))
         d.reason:SetText(c.reason ~= "" and ("„" .. c.reason .. "“") or "")
-        d.pay:SetText(c.paidVerified and ("|cff00ff00Zahlung im Briefkasten bestätigt|r " .. date("%d.%m. %H:%M", c.paidVerified))
-            or c.paidClaim and "|cffffd100Zahlung gemeldet, noch nicht im Briefkasten gesehen|r"
+        d.pay:SetText(c.paidVerified and (ns.UI.C("good") .. "Zahlung im Briefkasten bestätigt|r " .. date("%d.%m. %H:%M", c.paidVerified))
+            or c.paidClaim and (ns.UI.C("gold") .. "Zahlung gemeldet, noch nicht im Briefkasten gesehen|r")
             or (c.status == "angenommen" and string.format("Wartet auf Brief „Auftrag #%s“ an %s", c.id, K.Payee()) or ""))
         d.progress:SetText(c.assignee and string.format("Vergeben an %s · %d/%d Kills · Prämie %s/Kill · ausgezahlt %s",
             c.assignee, c.killsDone or 0, c.kills, Money(c.reward or 0), Money(c.paidOut or 0)) or "")

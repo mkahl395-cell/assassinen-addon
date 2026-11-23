@@ -100,7 +100,7 @@ end
 
 local function BuildList()
     list = CreateFrame("Frame", "AssassinenToeneListe", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
-    UI.Skin(list, .97)
+    UI.Window(list, .97, { border = 8 })
     list:SetFrameStrata("FULLSCREEN_DIALOG")
     list:SetSize(170, #Toene.CHOICES * 16 + 8)
     list:EnableMouse(true)
@@ -126,6 +126,7 @@ local function BuildList()
         end)
         list.items[i] = b
     end
+    UI.Ink(list)
     list:Hide()
 end
 
@@ -141,7 +142,7 @@ end
 local function Build()
     local f = CreateFrame("Frame", "AssassinenToene", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
     frame = f
-    UI.Skin(f, .95)
+    UI.Window(f, .95, { border = 14, seal = "BOTTOMRIGHT", sealSize = 40, sealX = 16, sealY = -16, blood = 2, bloodSize = 110 })
     f:SetSize(WIDTH, 92 + #Toene.EVENTS * ROW_H)
     f:SetFrameStrata("DIALOG")
     UI.MakeMovable(f, "soundsPos")
@@ -149,18 +150,9 @@ local function Build()
     table.insert(UISpecialFrames, "AssassinenToene") -- Escape schließt
     f:SetScript("OnHide", HideList)
 
-    local wings = UI.Art(f, "wings", 18)
-    wings:SetPoint("TOPLEFT", 4, -2)
-    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    f.title:SetPoint("LEFT", wings, "RIGHT", 4, 0)
-    f.title:SetText("|cffe6e1e1Töne|r")
+    f.title = UI.Header(f, UI.C("title") .. "Töne|r")
     local close = UI.TextButton(f, "x", 16, function() f:Hide() end, "Schließen")
     close:SetPoint("TOPRIGHT", -4, -4)
-    local rule = f:CreateTexture(nil, "ARTWORK")
-    rule:SetColorTexture(.5, .07, .09, .9)
-    rule:SetHeight(1)
-    rule:SetPoint("TOPLEFT", 1, -22)
-    rule:SetPoint("TOPRIGHT", -1, -22)
 
     f.master = UI.TextButton(f, "", 120, function()
         S.spySound = not S.spySound
@@ -202,12 +194,13 @@ local function Build()
     note:SetJustifyH("LEFT")
     note:SetText("Eigene Töne: Dateien als eigen1.ogg bis eigen5.ogg (oder .mp3) in den Ordner\n" ..
         "Interface\\AddOns\\AssassinenKills\\Sounds legen und das Spiel neu starten.")
+    UI.Ink(f)
     f:Hide()
 end
 
 function Toene.Refresh()
     if not frame then return end
-    frame.master.text:SetText(S.spySound and "Töne: |cff40ff40an|r" or "Töne: |cffff4040aus|r")
+    frame.master.text:SetText(S.spySound and ("Töne: " .. UI.C("good") .. "an|r") or ("Töne: " .. UI.C("bad") .. "aus|r"))
     for _, row in ipairs(rows) do
         local c = Toene.Choice(row.key)
         row.drop.text:SetText((c and c[2] or "?") .. "  |cff888888v|r")

@@ -195,7 +195,7 @@ local function Aimed(c, key)
     if not a then
         a = { c = c, first = now }
         aiming[key] = a
-        if not aimAlerted[key] or now - aimAlerted[key] > AIM_REALERT then
+        if (not aimAlerted[key] or now - aimAlerted[key] > AIM_REALERT) and not (Spy.Calm() and not c.kos) then
             aimAlerted[key] = now
             UI.Alert(string.format("IM ZIEL: %s (%s %s) hat dich anvisiert!", Spy.Colored(c), ClassName(c.class), Level(c)), true)
             Sound("aim")
@@ -233,6 +233,7 @@ local function CheckVanish(info, removedAt)
     if not S.stealthAlarm or not info or not info.c then return end
     local c = info.c
     if not STEALTHERS[c.class] or info.dead then return end
+    if Spy.Calm() and not c.kos then return end -- neutrale Stadt: Schurken tarnen sich dort ständig
     if GetTime() - info.t > 1.5 then return end
     -- Beweis: Tarnzauber gesehen oder Tarnung auf der Einheit. Sonst nur, wenn er nah war und mitten im Bild verschwand.
     local sure = info.aura or (casts[info.key] and GetTime() - casts[info.key] < CAST_HOLD) or false
@@ -262,6 +263,7 @@ end
 
 local function OnStealthReport(f, sender)
     if not S.stealthAlarm or sender == playerName then return end
+    if Spy.Calm() then return end
     local map, x, y = Karte.Unpack(f[6], f[7], f[8])
     local d = map and Karte.Offset(map, x, y)
     if not d or d > 300 then return end -- nur wer in der Nähe ist, muss es wissen
